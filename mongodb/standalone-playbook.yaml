@@ -1,0 +1,60 @@
+---
+- name: Provision MongoDB replica set
+  hosts: mongodb_standalone_server
+  become: true
+  tasks:
+    - name: Install required packages (gnupg and curl)
+      apt:
+        name:
+          - gnupg
+          - curl
+        state: present
+
+    - name: Download MongoDB GPG key
+      shell: |
+        curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+      args:
+        executable: /bin/bash
+
+    - name: Add MongoDB repository to sources.list.d
+      blockinfile:
+        path: /etc/apt/sources.list.d/mongodb-org-7.0.list
+        create: yes
+        block: |
+          deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse
+
+    - name: Update APT repositories
+      apt:
+        update_cache: yes
+
+    - name: Install MongoDB
+      apt:
+        name: mongodb-org
+        state: present
+
+    - name: Pin MongoDB package
+      shell: echo "mongodb-org hold" | sudo dpkg --set-selections
+
+    - name: Pin MongoDB package
+      shell: echo "mongodb-org-database hold" | sudo dpkg --set-selections
+
+    - name: Pin MongoDB package
+      shell: echo "mongodb-org-server hold" | sudo dpkg --set-selections
+
+    - name: Pin MongoDB package
+      shell: echo "mongodb-mongosh hold" | sudo dpkg --set-selections
+
+    - name: Pin MongoDB package
+      shell: echo "mongodb-org-mongos hold" | sudo dpkg --set-selections
+
+    - name: Pin MongoDB package
+      shell: echo "mongodb-org-tools hold" | sudo dpkg --set-selections
+
+    - name: Reload systemd configuration
+      shell: "systemctl daemon-reload"
+
+    - name: Start MongoDB service
+      service:
+        name: mongod
+        state: started
+        enabled: yes

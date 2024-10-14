@@ -1,0 +1,144 @@
+---
+- name: Provision MongoDB replica set
+  hosts: mongodb_cluster_servers
+  become: true
+  vars:
+    primary_node: "{{ hostvars['mongodb_instance_1'].ansible_host }}"
+    client_01: "{{ hostvars['mongodb_instance_2'].ansible_host }}"
+    client_02: "{{ hostvars['mongodb_instance_3'].ansible_host }}"
+  tasks:
+
+    - name: Install required packages (gnupg and curl)
+      apt:
+        name:
+          - gnupg
+          - curl
+        state: present
+
+    - name: Download MongoDB GPG key
+      shell: |
+        curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+      args:
+        executable: /bin/bash
+
+    - name: Add MongoDB repository to sources.list.d
+      blockinfile:
+        path: /etc/apt/sources.list.d/mongodb-org-7.0.list
+        create: yes
+        block: |
+          deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse
+
+    - name: Update APT repositories
+      apt:
+        update_cache: yes
+
+    - name: Install MongoDB
+      apt:
+        name: mongodb-org
+        state: present
+
+    - name: Pin MongoDB packages
+      shell: echo "{{ item }} hold" | sudo dpkg --set-selections
+      loop:
+        - "mongodb-org"
+        - "mongodb-org-database"
+        - "mongodb-org-server"
+        - "mongodb-mongosh"
+        - "mongodb-org-mongos"
+        - "mongodb-org-tools"
+
+    - name: Reload systemd configuration
+      shell: "systemctl daemon-reload"
+
+    - name: Start MongoDB service
+      service:
+        name: mongod
+        state: started
+        enabled: yes
+
+    - name: Create MongoDB admin user
+      shell: |
+        mongosh <<EOF
+        use admin
+        db.createUser({user: "{{mongodb_admin_username}}", pwd: "{{mongodb_admin_password}}", roles: [{role: "root", db: "admin"}, "readWriteAnyDatabase"]})
+        EOF
+      when: ansible_ssh_host == primary_node
+
+    - name: Generate random key content
+      shell: openssl rand -base64 756
+      register: random_key_output
+      when: ansible_host == primary_node
+      delegate_to: localhost
+
+    - name: Set random key as a variable
+      set_fact:
+        random_key: "{{ random_key_output.stdout }}"
+      run_once: true
+
+    - name: Create key file
+      copy:
+        content: "{{ random_key }}"
+        dest: /var/lib/mongodb/keyfile
+
+    - name: Set file permissions
+      command: chmod 600 /var/lib/mongodb/keyfile
+
+    - name: Change file ownership
+      command: chown -R mongodb:mongodb /var/lib/mongodb
+
+    - name: Replace IP address
+      lineinfile:
+        path: /etc/mongod.conf
+        regexp: '^  bindIp: .*'
+        line: '  bindIp: 127.0.0.1, {{ ansible_ssh_host }}'
+
+    - name: Add configuration block to /etc/mongodb
+      blockinfile:
+        path: /etc/mongod.conf
+        block: |
+          security:
+            authorization: enabled
+            keyFile: /var/lib/mongodb/keyfile
+
+          replication:
+            replSetName: "rs0"
+
+    - name: Restart mongodb
+      service:
+        name: mongod
+        state: restarted
+
+    - name: Wait for 5 seconds
+      pause:
+        seconds: 5
+
+    - name:  Initialize MongoDB replica set
+      shell: |
+        mongosh -u "{{ mongodb_admin_username }}" --password "{{ mongodb_admin_password }}" --authenticationDatabase admin <<EOF
+        rs.initiate()
+        EOF
+      when: ansible_ssh_host == primary_node
+
+    - name: Add MongoDB replica set members
+      shell: |
+        mongosh -u "{{ mongodb_admin_username }}" --password "{{ mongodb_admin_password }}" --authenticationDatabase admin <<EOF
+        rs.add( "{{client_01}}" )
+        rs.add( "{{client_02}}" )
+        EOF
+      when: ansible_ssh_host == primary_node
+
+    - name: Copy mongo_data.js.j2 file to remote server
+      copy:
+        src: ./mongo_data.js.j2
+        dest: /mongo_data.js
+      when: ansible_ssh_host == primary_node
+
+    - name: Create mongo_data.js file with sample data
+      template:
+        src: ./mongo_data.js.j2
+        dest: /etc/mongo_data.js
+      when: ansible_ssh_host == primary_node
+
+    - name: Insert data from js file
+      shell: mongosh -u "{{ mongodb_admin_username }}" --password "{{ mongodb_admin_password }}" --authenticationDatabase admin -f /etc/mongo_data.js
+      when: ansible_ssh_host == primary_node

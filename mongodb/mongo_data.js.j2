@@ -1,0 +1,314 @@
+db = db.getSiblingDB("admin");
+
+db.auth("{{ mongodb_admin_username }}", "{{ mongodb_admin_password }}");
+
+db = db.getSiblingDB("codex_administration");
+
+db.Organizations.insertOne({
+  "_id": "codex-exp",
+  "CreatedAt": {
+    "$date": "2022-10-28T15:45:14.394Z"
+  },
+  "UpdatedAt": {
+    "$date": "2023-12-07T12:30:50.185Z"
+  },
+  "CreatedBy": "d9d0cbb3-9f5f-430d-8243-f82d9f84aee1",
+  "UpdatedBy": "d9d0cbb3-9f5f-430d-8243-f82d9f84aee1",
+  "Name": "Codex Dev",
+  "Alias": "codex-dev",
+  "Description": "This is an organization for experimental env",
+  "Logo": "uploads/81PHdDQvJLECZWP.svg",
+  "LanguageCode": "en",
+  "StorageId": "sksksksk",
+  "Owners": [
+    "d9d0cbb3-9f5f-430d-8243-f82d9f84aee1"
+  ],
+  "IdentityProviders": null
+})
+
+db.Users.insertOne({
+  "_id": "d9d0cbb3-9f5f-430d-8243-f82d9f84aee1",
+  "CreatedAt": {
+    "$date": "2022-11-03T14:15:31.394Z"
+  },
+  "UpdatedAt": {
+    "$date": "2024-02-27T15:06:54.567Z"
+  },
+  "CreatedBy": "aa4612a1-09c8-4541-a41f-c18105d199e2",
+  "UpdatedBy": "d9d0cbb3-9f5f-430d-8243-f82d9f84aee1",
+  "Email": "ylber.g@gjirafa.com",
+  "FirstName": "Ylber",
+  "LastName": "Gashi",
+  "ImageUrl": "https://tojnhu4mvp.gjirafa.net/profilepictures/844zqBKPGoKYAtY+ELvOxld974QQcgOCIobxG48fq7k=/67795033.596227.png",
+  "IsApiKey": false,
+  "IsSuperAdmin": false
+})
+
+db = db.getSiblingDB("codex_codex-exp_administration");
+
+db.Teams.insertOne({
+  "_id": "tmPJxnDxeU",
+  "CreatedAt": {
+    "$date": "2022-12-09T16:30:52.684Z"
+  },
+  "UpdatedAt": {
+    "$date": "2024-02-12T12:04:46.184Z"
+  },
+  "CreatedBy": "d9d0cbb3-9f5f-430d-8243-f82d9f84aee1",
+  "UpdatedBy": "d9d0cbb3-9f5f-430d-8243-f82d9f84aee1",
+  "Name": "Codex Members",
+  "NormalizedName": "CODEX MEMBERS",
+  "Description": "Test",
+  "OrganizationId": "codex-exp",
+  "IsPredefined": false,
+  "AccessControl": {
+    "Content": {
+      "Rules": [
+        {
+          "Effect": 1,
+          "Actions": [
+            1
+          ],
+          "ModelsFilter": {
+            "All": true,
+            "Models": []
+          },
+          "SitesFilter": {
+            "All": true,
+            "Ids": []
+          },
+          "EntriesFilter": {
+            "Labels": {
+              "All": true,
+              "Ids": []
+            }
+          }
+        }
+      ],
+      "Permissions": [
+        {
+          "_id": "section_create",
+          "Effect": 1
+        },
+        {
+          "_id": "section_view",
+          "Effect": 1
+        },
+        {
+          "_id": "list_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "list_create",
+          "Effect": 1
+        },
+        {
+          "_id": "list_view",
+          "Effect": 1
+        },
+        {
+          "_id": "section_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "shared_view_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "url_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "url_create",
+          "Effect": 1
+        },
+        {
+          "_id": "url_view",
+          "Effect": 1
+        },
+        {
+          "_id": "tag_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "tag_create_suggested",
+          "Effect": 1
+        },
+        {
+          "_id": "tag_create_custom",
+          "Effect": 1
+        },
+        {
+          "_id": "tag_view",
+          "Effect": 1
+        }
+      ]
+    },
+    "Assets": {
+      "Rules": [
+        {
+          "Effect": 1,
+          "Actions": [
+            1
+          ],
+          "FoldersFilter": {
+            "All": true,
+            "Ids": []
+          },
+          "LabelsFilter": null
+        }
+      ],
+      "Permissions": [
+        {
+          "_id": "folder_manage",
+          "Effect": 1
+        }
+      ]
+    },
+    "Builder": {
+      "Permissions": [
+        {
+          "_id": "model_create",
+          "Effect": 1
+        },
+        {
+          "_id": "model_edit",
+          "Effect": 1
+        },
+        {
+          "_id": "model_delete",
+          "Effect": 1
+        },
+        {
+          "_id": "model_publish",
+          "Effect": 1
+        },
+        {
+          "_id": "model_view",
+          "Effect": 1
+        },
+        {
+          "_id": "webhook_create",
+          "Effect": 1
+        },
+        {
+          "_id": "webhook_edit",
+          "Effect": 1
+        },
+        {
+          "_id": "webhook_delete",
+          "Effect": 1
+        },
+        {
+          "_id": "webhook_view",
+          "Effect": 1
+        },
+        {
+          "_id": "plugin_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "plugin_view",
+          "Effect": 1
+        },
+        {
+          "_id": "job_view",
+          "Effect": 1
+        },
+        {
+          "_id": "job_create",
+          "Effect": 1
+        }
+      ]
+    },
+    "Administration": {
+      "Permissions": [
+        {
+          "_id": "team_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "team_view",
+          "Effect": 1
+        },
+        {
+          "_id": "user_view",
+          "Effect": 1
+        },
+        {
+          "_id": "user_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "integration_view",
+          "Effect": 1
+        },
+        {
+          "_id": "integration_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "author_view",
+          "Effect": 1
+        },
+        {
+          "_id": "author_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "label_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "label_view",
+          "Effect": 1
+        },
+        {
+          "_id": "site_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "site_view",
+          "Effect": 1
+        },
+        {
+          "_id": "apiKey_manage",
+          "Effect": 1
+        },
+        {
+          "_id": "apiKey_view",
+          "Effect": 1
+        },
+        {
+          "_id": "localization_manage",
+          "Effect": 1
+        }
+      ]
+    },
+    "Plugins": {
+      "PluginsPermissions": [
+        {
+          "PluginId": "pl0mfYZL9Z",
+          "Permissions": []
+        }
+      ]
+    }
+  },
+  "Members": [
+		"d9d0cbb3-9f5f-430d-8243-f82d9f84aee1"
+  ],
+  "Status": 1
+})
+
+db.OrganizationUsers.insertOne({
+  "_id": "ouEcl9B6bo",
+  "CreatedAt": {
+    "$date": "2022-11-25T13:52:23.616Z"
+  },
+  "UpdatedAt": null,
+  "CreatedBy": "aa4612a1-09c8-4541-a41f-c18105d199e2",
+  "UpdatedBy": null,
+  "UserId": "d9d0cbb3-9f5f-430d-8243-f82d9f84aee1",
+  "OrganizationId": "codex-exp",
+  "Status": 1
+})

@@ -1,0 +1,65 @@
+---
+- name: Install Apache Pulsar on Ubuntu
+  hosts: pulsar_servers[0]
+  become: true
+  vars:
+    pulsar_version: "3.1.1"
+    pulsar_package_name: "apache-pulsar-{{ pulsar_version }}-bin.tar.gz"
+    pulsar_download_url: "https://archive.apache.org/dist/pulsar/pulsar-{{ pulsar_version }}/{{ pulsar_package_name }}"
+    pulsar_install_dir: "/opt/apache-pulsar"
+
+  tasks:
+    - name: Update apt cache
+      become: true
+      apt:
+        update_cache: yes
+
+    - name: Install java 17
+      become: true
+      apt:
+        name: openjdk-17-jdk
+        state: present
+
+    - name: Download the official Apache Pulsar distribution
+      shell: sudo wget -P /opt {{ pulsar_download_url }}
+
+    - name: Unpack the tar file
+      shell: sudo tar -xzvf /opt/{{ pulsar_package_name }} -C /opt
+
+    - name: Create pulsar standalone systemd file
+      file:
+        path: /etc/systemd/system/pulsar.service
+        state: touch
+
+    - name: Edit pulsar standalone systemd file
+      blockinfile:
+        dest: /etc/systemd/system/pulsar.service
+        block: |
+          [Unit]
+          Description=Pulsar standalone
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=root
+          Group=root
+          WorkingDirectory=/opt/apache-pulsar-{{ pulsar_version }}
+          ExecStart=/opt/apache-pulsar-{{ pulsar_version }}/bin/pulsar standalone
+          RestartSec=10s
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target  
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start Pulsar systemd service
+      systemd:
+        name: pulsar.service
+        state: started
+        enabled: true
+
+    - name: Create "codex" tenant
+      shell: /opt/apache-pulsar-{{ pulsar_version }}/bin/pulsar-admin tenants create codex

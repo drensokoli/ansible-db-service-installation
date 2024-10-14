@@ -1,0 +1,92 @@
+- name: Install Elasticsearch cluster
+  hosts: elasticsearch_cluster_servers
+  become: true
+  vars:
+    elastic_instance_1: "{{ hostvars['elastic_instance_1'].ansible_host }}"
+    elastic_instance_2: "{{ hostvars['elastic_instance_2'].ansible_host }}"
+    
+  tasks:
+
+    - name: Download and install the public signing key
+      shell: wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+
+    - name: Install the apt-transport-https package
+      shell: sudo apt-get install apt-transport-https
+
+    - name: Save the repository definition
+      shell: echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Elasticsearch
+      apt:
+        name: elasticsearch
+        state: present
+
+    - name: Enable and start Elasticsearch service
+      shell: sudo systemctl daemon-reload && sudo systemctl enable elasticsearch && sudo systemctl start elasticsearch
+      when: ansible_ssh_host == elastic_instance_1
+      
+    - name: Generate a node enrollment token
+      shell: sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s node
+      register: enrollment_token_output
+      when: ansible_ssh_host == elastic_instance_1
+
+    - name: Set enrollment token as a variable
+      set_fact:
+        enrollment_token: "{{ enrollment_token_output.stdout }}"
+      run_once: true
+
+    - name: Joining nodes
+      shell: yes | sudo /usr/share/elasticsearch/bin/elasticsearch-reconfigure-node --enrollment-token {{ enrollment_token }}
+      when: ansible_ssh_host == elastic_instance_2
+
+    - name: Remove Elasticsearch configurations
+      replace:
+        path: /etc/elasticsearch/elasticsearch.yml
+        regexp: "{{ item }}"
+        replace: ""
+      with_items:
+        - "^http.host: 0.0.0.0$"
+        - "^discovery.seed_hosts: \\[\"127.0.0.1:9300\"\\]\\s*$"
+        - "^cluster.initial_master_nodes:.*$"
+
+    - name: Add Elasticsearch configurations
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        insertbefore: BOF
+        block: |
+          cluster.name: elastic-cluster
+          node.name: {{ ansible_hostname }}
+          network.host: 0.0.0.0
+          http.port: 9200
+          discovery.seed_hosts: ["{{ elastic_instance_1 }}", "{{ elastic_instance_2 }}"]
+          cluster.initial_master_nodes: ["{{ elastic_instance_1 }}"]
+          http.host: 0.0.0.0
+          # node.roles: [ master, data ]
+
+    - name: Enable and start Elasticsearch service
+      shell: sudo systemctl daemon-reload && sudo systemctl enable elasticsearch && sudo systemctl start elasticsearch && sudo systemctl restart elasticsearch
+
+    - name: Reset elastic password
+      expect:
+        command: sudo /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic --silent
+        responses:
+          '(?i)continue': "y"
+      register: elastic_password_reset
+      when: ansible_ssh_host == elastic_instance_1
+
+    - name: Set elastic password as a variable
+      set_fact:
+        elastic_password: "{{ elastic_password_reset.stdout }}"
+      run_once: true
+
+    - name: Save elastic password
+      shell: echo "elasticPassword='{{ elastic_password }}'" >> /Codex.Infrastructure/Ansible/connection_strings.txt
+      when: ansible_ssh_host == elastic_instance_1
+      
+    - name: Save elastic password
+      shell: sed -i 's/Please confirm that you would like to continue \[y\/N\]//g' /Codex.Infrastructure/Ansible/connection_strings.txt
+      when: ansible_ssh_host == elastic_instance_1

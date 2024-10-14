@@ -1,0 +1,88 @@
+---
+- name: Install Redis-Stack
+  hosts: redis_servers
+  become: true
+  vars:
+    master_node: "{{ hostvars['redis_instance_1'].ansible_host }}"
+    slave_node_01: "{{ hostvars['redis_instance_2'].ansible_host }}"
+  tasks:
+
+    - name: Download Redis GPG key
+      shell: curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+
+    - name: Set permissions for Redis GPG key
+      shell: sudo chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+
+    - name: Add Redis APT repository
+      shell: echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+
+    - name: Update APT package cache
+      apt:
+        update_cache: yes
+
+    - name: Install Redis
+      shell: sudo apt-get install redis -y
+
+    - name: Replace IP address
+      lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: 'bind 127.0.0.1 -::1'
+        line: 'bind 127.0.0.1 {{ ansible_ssh_host }}'
+
+    # - name: Set password
+    #   lineinfile:
+    #     path: /etc/redis/redis.conf
+    #     regexp: '# requirepass foobared'
+    #     line: 'requirepass {{ redis_password }}'
+
+    - name: Set appendonly to yes
+      lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: 'appendonly no'
+        line: 'appendonly yes'
+      when: ansible_ssh_host == master_node
+
+    - name: Set protected-mode to no
+      lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: 'protected-mode yes'
+        line: 'protected-mode no'
+
+    - name: Set maxmemory-policy
+      lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: '# maxmemory-policy noeviction'
+        line: 'maxmemory-policy noeviction'
+      when: ansible_ssh_host == master_node
+      
+    - name: Set replicaof
+      lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: '# replicaof <masterip> <masterport>'
+        line: 'replicaof {{ master_node }} 6379 '
+      when: ansible_ssh_host == slave_node_01
+
+    # - name: Set appendonly to yes
+    #   lineinfile:
+    #     path: /etc/redis/redis.conf
+    #     regexp: '# masterauth <master-password>'
+    #     line: 'masterauth {{ redis_password }}'
+    #   when: ansible_ssh_host == slave_node_01
+
+    - name: Daemon-reload
+      shell: sudo systemctl daemon-reload
+
+    - name: Start Redis
+      service:
+        name: redis-server
+        state: started
+        enabled: yes
+        
+    # - name: Authenticate
+    #   shell: redis-cli -a {{ redis_password }} ping
+
+    - name: Restart Redis
+      service:
+        name: redis-server
+        state: restarted
+        enabled: yes

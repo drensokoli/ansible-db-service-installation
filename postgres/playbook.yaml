@@ -1,0 +1,72 @@
+---
+- name: Install PostgreSQL on Ubuntu
+  hosts: postgres_servers
+  become: yes
+  tasks:
+
+    - name: Update APT package cache
+      apt:
+        update_cache: yes
+
+    - name: Install dependencies for PostgreSQL
+      apt: name={{ item }} update_cache=true state=latest
+      with_items:
+      - bash
+      - openssl
+      - libssl-dev
+      - libssl-doc
+
+    - name: Install PostgreSQL
+      apt: name={{ item }} update_cache=true state=present
+      with_items:
+      - postgresql
+      - postgresql-contrib
+      - libpq-dev
+      - python3-psycopg2
+      - acl
+
+    - name: Start and enable service
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Create {{ postgres_db }} database
+      become: true
+      become_user: postgres
+      postgresql_db: name={{ postgres_db }}
+           template='template0'
+           state=present
+
+    - name: Ensure user has access to the new database
+      become: true
+      become_user: postgres
+      postgresql_user: db={{ postgres_db }}
+           name={{ postgres_admin_username }}
+           password={{ postgres_admin_password }}
+           priv=ALL
+           state=present
+
+    - name: Copy SQL script to remote machine
+      ansible.builtin.copy:
+        src: ./postgres_script.sql
+        dest: /tmp/postgres_script.sql
+
+    - name: Make file executable
+      shell: sudo chmod +x /tmp/postgres_script.sql
+
+    - name: Execute SQL script
+      become: true
+      become_user: postgres
+      shell: psql -U {{ postgres_admin_username }} -d {{ postgres_db }} -f /tmp/postgres_script.sql
+
+    - name:  Configure PostgreSQL to listen on all IP addresses
+      lineinfile:
+        path: /etc/postgresql/14/main/postgresql.conf
+        regexp: '^#?listen_addresses = .*'
+        line: "listen_addresses = '*'"
+
+    - name: Start and enable service
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted

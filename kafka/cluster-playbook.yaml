@@ -1,0 +1,111 @@
+---
+- name: Install Apache Kafka Cluster on Ubuntu
+  hosts: kafka_servers
+  become: true
+  vars:
+    kafka_instance_1: "{{ hostvars['kafka_instance_1'].ansible_host }}"
+    kafka_instance_2: "{{ hostvars['kafka_instance_2'].ansible_host }}"
+
+  tasks:
+    - name: Download Kafka binary package
+      get_url:
+        url: "https://downloads.apache.org/kafka/3.5.1/kafka_2.13-3.5.1.tgz"
+        dest: /tmp/kafka.tgz
+
+    - name: Extract Kafka binary package
+      unarchive:
+        src: /tmp/kafka.tgz
+        dest: /home/ubuntu
+        remote_src: yes
+
+    - name: Install Java Developer Kit
+      shell: sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+
+    - name: Create Kafka Directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      with_items:
+        - /data/kafka
+        - /home/ubuntu/kafka_2.13-3.5.1/data/zookeeper
+
+    - name: Create Zookeeper ID File
+      copy:
+        content: "1"
+        dest: /home/ubuntu/kafka_2.13-3.5.1/data/zookeeper/myid
+      when: ansible_ssh_host == kafka_instance_1
+
+    - name: Create Zookeeper ID File
+      copy:
+        content: "2"
+        dest: /home/ubuntu/kafka_2.13-3.5.1/data/zookeeper/myid
+      when: ansible_ssh_host == kafka_instance_2
+
+    - name: Modify the Kafka and Zookeeper configuration files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: ubuntu
+        group: ubuntu
+      loop:
+        - src: ./config/server.properties.j2
+          dest: /home/ubuntu/kafka_2.13-3.5.1/config/server.properties
+        - src: ./config/zookeeper.properties.j2
+          dest: /home/ubuntu/kafka_2.13-3.5.1/config/zookeeper.properties
+
+    - name: Update broker.id in server.properties in kafka_instance_2
+      lineinfile:
+        path: /home/ubuntu/kafka_2.13-3.5.1/config/server.properties
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - regexp: '^broker.id=0'
+          line: 'broker.id=1'
+        - regexp: '^listeners=PLAINTEXT://kafka1:9092'
+          line: 'listeners=PLAINTEXT://kafka2:9092'
+      when: ansible_ssh_host == kafka_instance_2
+
+    - name: Add custom hostnames to /etc/hosts file
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ item }}"
+      with_items:
+        - "{{ kafka_instance_1 }} kafka1"
+        - "{{ kafka_instance_2 }} kafka2"
+        - "{{ kafka_instance_1 }} zookeeper1"
+        - "{{ kafka_instance_2 }} zookeeper2"
+
+    - name: Create the Kafka and Zookeeper systemd file
+      template:
+        src: "{{ item.src }}"
+        dest: "/etc/systemd/system/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - src: ./systemd/zookeeper.service.j2
+          dest: zookeeper.service
+        - src: ./systemd/kafka.service.j2
+          dest: kafka.service
+
+    - name: Reload systemctl daemon
+      systemd:
+        daemon_reload: yes
+      become: true
+
+    - name: Start and enable Zookeeper service
+      systemd:
+        name: zookeeper
+        state: started
+        enabled: yes
+      become: true
+
+    - name: Start and enable Kafka service
+      systemd:
+        name: kafka
+        state: started
+        enabled: yes
+      become: true

@@ -1,0 +1,43 @@
+- name: Install Elasticsearch cluster
+  hosts: elasticsearch_standalone_server
+  become: true
+  tasks:
+    - name: Download and install the public signing key
+      shell: wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+
+    - name: Install the apt-transport-https package
+      shell: sudo apt-get install apt-transport-https
+
+    - name: Save the repository definition
+      shell: echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Elasticsearch
+      apt:
+        name: elasticsearch
+        state: present
+
+    - name: Enable and start Elasticsearch service
+      shell: sudo systemctl daemon-reload && sudo systemctl enable elasticsearch && sudo systemctl start elasticsearch
+
+    - name: Reset elastic password
+      expect:
+        command: sudo /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic --silent
+        responses:
+          '(?i)continue': "y"
+      register: elastic_password_reset
+
+    - name: Set elastic password as a variable
+      set_fact:
+        elastic_password: "{{ elastic_password_reset.stdout | replace('Please confirm that you would like to continue [y/N]', '') }}"
+      run_once: true
+
+    - name: Echo elastic password
+      debug:
+        msg: "export ELASTIC_PASSWORD={{ elastic_password }}"
+
+    - name: Restart Elasticsearch service
+      shell: sudo systemctl restart elasticsearch

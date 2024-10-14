@@ -1,0 +1,55 @@
+---
+- name: Install Apache Pulsar on Ubuntu
+  hosts: pulsar_servers
+  become: true
+  vars:
+    pulsar_instance_1: "{{ hostvars['pulsar_instance_1'].ansible_host }}"
+    pulsar_instance_2: "{{ hostvars['pulsar_instance_2'].ansible_host }}"
+
+  tasks:
+    - name: Download Pulsar binary package
+      get_url:
+        url: "https://archive.apache.org/dist/pulsar/pulsar-3.0.2/apache-pulsar-3.0.2-bin.tar.gz"
+        dest: /home/ubuntu/pulsar.tgz
+      become: true
+
+    - name: Extract Pulsar binary package
+      unarchive:
+        src: /home/ubuntu/pulsar.tgz
+        dest: /home/ubuntu
+        remote_src: yes
+      become: true
+
+    - name: Initialize Pulsar cluster metadata
+      shell: /home/ubuntu/apache-pulsar-3.0.2/bin/pulsar initialize-cluster-metadata --cluster codex-pulsar-cluster --metadata-store zk:{{ pulsar_instance_1 }}:2181,{{ pulsar_instance_2 }}:2181 --configuration-metadata-store zk:{{ pulsar_instance_1 }}:2181,{{ pulsar_instance_2 }}:2181 --web-service-url http://{{ pulsar_instance_1 }}:8080,{{ pulsar_instance_2 }}:8080 --broker-service-url pulsar://{{ pulsar_instance_1 }}:6650,{{ pulsar_instance_2 }}:6650 
+      become: true
+      when: ansible_ssh_host == pulsar_instance_2
+
+    - name: Configure Bookkeeper bookies
+      lineinfile:
+        path: /home/ubuntu/apache-pulsar-3.0.2/conf/bookkeeper.conf
+        regexp: 'metadataServiceUri='
+        line: 'metadataServiceUri=zk://{{ ansible_ssh_host }}:2181/ledgers'
+
+    - name: Start the Bookkeeper service
+      shell: /home/ubuntu/apache-pulsar-3.0.2/bin/pulsar-daemon start bookie
+      become: true
+
+    - name: Edit the Broker configuration file
+      become: true
+      lineinfile:
+        path: /home/ubuntu/apache-pulsar-3.0.2/conf/broker.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - { regexp: "metadataStoreUrl=", line: "metadataStoreUrl=zk:{{ pulsar_instance_1 }}:2181,{{ pulsar_instance_2 }}:2181" }
+        - { regexp: "configurationMetadataStoreUrl=", line: "configurationMetadataStoreUrl=zk:{{ pulsar_instance_1 }}:2181,{{ pulsar_instance_2 }}:2181" }
+        - { regexp: "clusterName=", line: "clusterName=codex-pulsar-cluster" }
+        - { regexp: "loadBalancerOverrideBrokerNicSpeedGbps=", line: "loadBalancerOverrideBrokerNicSpeedGbps=20" }
+
+    - name: Start the Broker
+      shell: /home/ubuntu/apache-pulsar-3.0.2/bin/pulsar-daemon start broker
+      become: true
+
+    - name: Create "codex" tenants
+      shell: /home/ubuntu/apache-pulsar-3.0.2/bin/pulsar-admin tenants create codex

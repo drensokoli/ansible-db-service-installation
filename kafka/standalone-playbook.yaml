@@ -1,0 +1,50 @@
+---
+- name: Install Apache Kafka Standalone on Ubuntu
+  hosts: kafka_servers
+  become: true
+  tasks:
+    - name: Download Kafka binaries
+      get_url:
+        url: "https://downloads.apache.org/kafka/3.5.1/kafka_2.13-3.5.1.tgz"
+        dest: /tmp/kafka.tgz
+
+    - name: Extract Kafka binaries
+      unarchive:
+        src: /tmp/kafka.tgz
+        dest: /opt
+        remote_src: yes
+
+    - name: Install Java Developer Kit
+      shell: sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+
+    - name: Create the Kafka and Zookeeper systemd file
+      template:
+        src: "{{ item.src }}"
+        dest: "/etc/systemd/system/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - src: ./systemd/zookeeper.service.j2
+          dest: zookeeper.service
+        - src: ./systemd/kafka.service.j2
+          dest: kafka.service
+
+    - name: Reload systemctl daemon
+      systemd:
+        daemon_reload: yes
+      become: true
+
+    - name: Start and enable Zookeeper service
+      systemd:
+        name: zookeeper
+        state: started
+        enabled: yes
+      become: true
+
+    - name: Start and enable Kafka service
+      systemd:
+        name: kafka
+        state: started
+        enabled: yes
+      become: true
